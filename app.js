@@ -1,4 +1,4 @@
-const APP_VERSION = "2.0.0";
+const APP_VERSION = "2.0.2";
 const STORAGE_PREFIX = "healthTracker:";
 const CATEGORIES = ["weight", "meals", "exercise", "vitals"];
 const GIST_FILENAME = "health-tracker.json";
@@ -1140,26 +1140,18 @@ if (typeof Chart === "undefined") {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").then((reg) => {
-      reg.addEventListener("updatefound", () => {
-        const sw = reg.installing;
-        if (!sw) return;
-        sw.addEventListener("statechange", () => {
-          // 既存のSWがある状態で installed になった＝新バージョンが待機中
-          if (sw.state === "installed" && navigator.serviceWorker.controller) {
-            const bar = document.getElementById("updateBar");
-            bar.hidden = false;
-            document.getElementById("updateBtn").onclick = () => {
-              sw.postMessage({ type: "SKIP_WAITING" });
-            };
-          }
-        });
-      });
-    });
+    // 「ページを開いた時点で既にSWに制御されていたか」を先に確定させる。
+    // 初回インストールでは false になる。これを見ないと、初回の clients.claim() による
+    // controllerchange を「更新」と誤認し、リロードが暴発する。
+    const hadController = !!navigator.serviceWorker.controller;
 
+    navigator.serviceWorker.register("sw.js");
+
+    // 新しいSWが skipWaiting で主導権を取ったときだけ再読み込みし、
+    // 画面を最新版に入れ替える（ユーザーへの確認は行わない）。
     let reloading = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (reloading) return;
+      if (!hadController || reloading) return;
       reloading = true;
       location.reload();
     });

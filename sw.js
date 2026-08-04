@@ -1,7 +1,7 @@
 // Service Worker
 // 【重要】アプリのファイルを変更したら必ず CACHE_VERSION を上げること。
 // 上げ忘れると、iPhone 側に古い画面がキャッシュされたまま更新されない。
-const CACHE_VERSION = "v2.0.0";
+const CACHE_VERSION = "v2.0.2";
 const CACHE_NAME = `health-tracker-${CACHE_VERSION}`;
 
 const PRECACHE = [
@@ -17,6 +17,10 @@ const PRECACHE = [
 ];
 
 self.addEventListener("install", (event) => {
+  // 待機させず即座に新バージョンへ入れ替える。
+  // 待機させると「更新するか」をユーザーに問う必要が生じ、その判断UIが
+  // 誤検知の温床になるため、個人用アプリでは自動更新に倒す。
+  self.skipWaiting();
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE)));
 });
 
@@ -27,11 +31,6 @@ self.addEventListener("activate", (event) => {
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
-});
-
-// 更新バーの「更新」ボタンから呼ばれる
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("fetch", (event) => {

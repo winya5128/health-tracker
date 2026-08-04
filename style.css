@@ -79,17 +79,6 @@ body {
   white-space: nowrap;
 }
 
-.update-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 8px 16px;
-  background: #f5c518;
-  color: #2a2200;
-  font-size: 0.85rem;
-}
-
 /* ---------- レイアウト ---------- */
 
 main {

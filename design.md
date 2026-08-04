@@ -260,8 +260,18 @@ sequenceDiagram
 `sw.js` の `CACHE_VERSION` を**変更のたびに必ず上げる**こと。
 上げ忘れるとiPhone側に古い画面がキャッシュされたまま更新されない。
 
-新バージョンを検知するとアプリ上部に「新しいバージョンがあります／更新」バーが出る。
-押すと `SKIP_WAITING` → `controllerchange` → 自動リロードで切り替わる。
+更新は**自動**で行う。新しいSWは `install` 時に `skipWaiting()` で即座に主導権を取り、
+`activate` の `clients.claim()` が `controllerchange` を発火させ、アプリ側がリロードして
+最新版に入れ替わる。ユーザーへの確認は行わない。
+
+> v2.0.0 では「新しいバージョンがあります／更新」バーを表示する方式だったが、
+> **初回インストール時の `clients.claim()` による `controllerchange` を「更新」と誤認し、
+> 何も更新していないのにバーが出る不具合**があった（v2.0.2で修正）。
+> 判断を求めるUIを置くこと自体が誤検知の温床だったため、UIごと廃止して自動更新に倒した。
+>
+> 誤検知を防ぐ要点は、**ページ読み込み時点の `navigator.serviceWorker.controller` を
+> `hadController` として先に確定させ、それが `false`（＝初回インストール）のときは
+> `controllerchange` でリロードしない**こと。これを怠ると初回から画面が再読み込みされる。
 
 ## 9. 既知の制約・今後の課題
 
