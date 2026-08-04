@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0">
+<title>体重ノート</title>
+<meta name="theme-color" content="#1a7a5a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="体重ノート">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+<script src="vendor/chart.umd.min.js" defer></script>
+</head>
+<body>
+
+<header class="app-header">
+  <h1 id="appTitle">体重ノート</h1>
+  <div class="sync-status" id="syncStatus" role="status" aria-live="polite"></div>
+</header>
+
+<div class="update-bar" id="updateBar" hidden>
+  新しいバージョンがあります
+  <button type="button" id="updateBtn" class="btn btn-small">更新</button>
+</div>
+
+<main id="main">
+
+  <!-- ============ ホーム ============ -->
+  <section id="tab-home" class="tab-panel active">
+
+    <div class="card today-card">
+      <div class="today-head">
+        <span class="today-label">今日</span>
+        <span class="today-date" id="todayDate"></span>
+      </div>
+      <div class="today-grid">
+        <button type="button" class="today-slot" data-goto="weight">
+          <span class="slot-label">体重</span>
+          <span class="slot-value" id="todayWeight">—</span>
+        </button>
+        <button type="button" class="today-slot" data-goto="meals">
+          <span class="slot-label">摂取カロリー</span>
+          <span class="slot-value" id="todayCalories">—</span>
+        </button>
+      </div>
+      <p class="today-hint" id="todayHint"></p>
+    </div>
+
+    <div class="card goal-card" id="goalCard">
+      <div class="goal-row">
+        <div class="goal-item">
+          <span class="goal-label">現在</span>
+          <strong class="goal-value" id="goalCurrent">—</strong>
+        </div>
+        <div class="goal-item">
+          <span class="goal-label">目標</span>
+          <strong class="goal-value" id="goalTarget">—</strong>
+        </div>
+        <div class="goal-item">
+          <span class="goal-label">残り</span>
+          <strong class="goal-value" id="goalRemain">—</strong>
+        </div>
+      </div>
+      <div class="goal-bar"><div class="goal-bar-fill" id="goalBarFill"></div></div>
+      <p class="goal-note" id="goalNote">目標体重は「その他」タブで設定できます。</p>
+    </div>
+
+    <div class="panel-header">
+      <h2>推移</h2>
+      <select id="rangeSelect" aria-label="表示期間">
+        <option value="14">14日</option>
+        <option value="30" selected>30日</option>
+        <option value="90">90日</option>
+        <option value="365">1年</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <h3>体重 <small>実測と7日移動平均</small></h3>
+      <div class="chart-box"><canvas id="chartWeight"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h3>摂取カロリー</h3>
+      <div class="chart-box"><canvas id="chartCalories"></canvas></div>
+    </div>
+
+    <details class="card collapsible">
+      <summary>その他のグラフ（運動・睡眠）</summary>
+      <div class="chart-box"><canvas id="chartExercise"></canvas></div>
+      <div class="chart-box"><canvas id="chartSleep"></canvas></div>
+    </details>
+
+    <p id="noChartLibNotice" class="notice" hidden>
+      グラフを描画できませんでした。記録の登録・一覧は通常どおり利用できます。
+    </p>
+  </section>
+
+  <!-- ============ 体重 ============ -->
+  <section id="tab-weight" class="tab-panel">
+    <form id="form-weight" class="card quick-form">
+      <label class="field">
+        <span class="field-label">日付</span>
+        <input type="date" name="date" required>
+      </label>
+
+      <div class="weight-input-row">
+        <button type="button" class="step-btn" id="weightMinus" aria-label="0.1減らす">−</button>
+        <label class="weight-main">
+          <input type="number" name="weight" id="weightInput"
+                 inputmode="decimal" step="0.1" min="0" max="300" required
+                 placeholder="0.0" autocomplete="off">
+          <span class="unit">kg</span>
+        </label>
+        <button type="button" class="step-btn" id="weightPlus" aria-label="0.1増やす">＋</button>
+      </div>
+      <p class="weight-hint" id="weightHint"></p>
+
+      <label class="field">
+        <span class="field-label">メモ（任意）</span>
+        <input type="text" name="memo" autocomplete="off">
+      </label>
+
+      <button type="submit" class="btn btn-primary btn-block">記録する</button>
+    </form>
+
+    <h2 class="list-heading">記録一覧</h2>
+    <div class="table-wrap">
+      <table id="table-weight">
+        <thead><tr><th>日付</th><th>体重</th><th>メモ</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ 食事 ============ -->
+  <section id="tab-meals" class="tab-panel">
+    <form id="form-meals" class="card quick-form">
+      <label class="field">
+        <span class="field-label">日付</span>
+        <input type="date" name="date" required>
+      </label>
+
+      <div class="field">
+        <span class="field-label">区分</span>
+        <div class="segmented" id="mealTypeSeg" role="radiogroup" aria-label="食事区分">
+          <button type="button" class="seg-btn" data-value="朝食" role="radio">朝食</button>
+          <button type="button" class="seg-btn" data-value="昼食" role="radio">昼食</button>
+          <button type="button" class="seg-btn" data-value="夕食" role="radio">夕食</button>
+          <button type="button" class="seg-btn" data-value="間食" role="radio">間食</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">選んだメニュー</span>
+        <ul id="mealItemsList" class="meal-items-list"></ul>
+        <div class="meal-total">合計 <strong id="mealTotalDisplay">0</strong> kcal</div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">メニューをタップして追加</span>
+        <input type="search" id="foodFilter" class="food-filter"
+               placeholder="絞り込み（任意）" autocomplete="off" enterkeyhint="search">
+        <div id="foodTiles" class="food-tiles"></div>
+        <button type="button" id="newFoodBtn" class="btn btn-ghost btn-block">＋ 新しいメニューを登録</button>
+      </div>
+
+      <div id="newFoodForm" class="new-food-form" hidden>
+        <label class="field">
+          <span class="field-label">メニュー名</span>
+          <input type="text" id="newFoodName" autocomplete="off" enterkeyhint="next">
+        </label>
+        <label class="field">
+          <span class="field-label">1人前のカロリー (kcal)</span>
+          <input type="number" id="newFoodKcal" inputmode="numeric" step="1" min="0" enterkeyhint="done">
+        </label>
+        <div class="row-btns">
+          <button type="button" id="newFoodCancel" class="btn btn-ghost">キャンセル</button>
+          <button type="button" id="newFoodSave" class="btn btn-primary">登録して追加</button>
+        </div>
+      </div>
+
+      <details class="advanced">
+        <summary>詳細（手動調整・メモ）</summary>
+        <label class="field">
+          <span class="field-label">カロリー手動調整 (kcal)</span>
+          <input type="number" name="caloriesOverride" id="caloriesOverride"
+                 inputmode="numeric" step="1" min="0" placeholder="空欄なら自動合計">
+        </label>
+        <label class="field">
+          <span class="field-label">メモ</span>
+          <input type="text" name="memo" autocomplete="off" placeholder="外食・飲み会など">
+        </label>
+      </details>
+
+      <button type="submit" class="btn btn-primary btn-block">記録する</button>
+    </form>
+
+    <h2 class="list-heading">記録一覧</h2>
+    <div class="table-wrap">
+      <table id="table-meals">
+        <thead><tr><th>日付</th><th>区分</th><th>内容</th><th>kcal</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ その他 ============ -->
+  <section id="tab-other" class="tab-panel">
+
+    <details class="card collapsible">
+      <summary>運動の記録</summary>
+      <form id="form-exercise" class="quick-form">
+        <label class="field"><span class="field-label">日付</span><input type="date" name="date" required></label>
+        <label class="field"><span class="field-label">種目</span><input type="text" name="activity" required autocomplete="off"></label>
+        <label class="field"><span class="field-label">時間 (分)</span><input type="number" name="duration" inputmode="numeric" step="1" min="0"></label>
+        <label class="field"><span class="field-label">歩数</span><input type="number" name="steps" inputmode="numeric" step="1" min="0"></label>
+        <label class="field"><span class="field-label">メモ</span><input type="text" name="memo" autocomplete="off"></label>
+        <button type="submit" class="btn btn-primary btn-block">記録する</button>
+      </form>
+      <div class="table-wrap">
+        <table id="table-exercise">
+          <thead><tr><th>日付</th><th>種目</th><th>時間</th><th>歩数</th><th>メモ</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </details>
+
+    <details class="card collapsible">
+      <summary>睡眠・血圧の記録</summary>
+      <form id="form-vitals" class="quick-form">
+        <label class="field"><span class="field-label">日付</span><input type="date" name="date" required></label>
+        <label class="field"><span class="field-label">睡眠時間 (h)</span><input type="number" name="sleepHours" inputmode="decimal" step="0.1" min="0" max="24"></label>
+        <label class="field"><span class="field-label">血圧 上</span><input type="number" name="bpHigh" inputmode="numeric" step="1" min="0"></label>
+        <label class="field"><span class="field-label">血圧 下</span><input type="number" name="bpLow" inputmode="numeric" step="1" min="0"></label>
+        <label class="field"><span class="field-label">体調メモ</span><input type="text" name="memo" autocomplete="off"></label>
+        <button type="submit" class="btn btn-primary btn-block">記録する</button>
+      </form>
+      <div class="table-wrap">
+        <table id="table-vitals">
+          <thead><tr><th>日付</th><th>睡眠</th><th>血圧</th><th>メモ</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </details>
+
+    <details class="card collapsible" id="settingsCard">
+      <summary>目標の設定</summary>
+      <div class="quick-form">
+        <label class="field">
+          <span class="field-label">目標体重 (kg)</span>
+          <input type="number" id="setTargetWeight" inputmode="decimal" step="0.1" min="0" max="300">
+        </label>
+        <label class="field">
+          <span class="field-label">1日の摂取カロリー目安 (kcal)</span>
+          <input type="number" id="setCalorieTarget" inputmode="numeric" step="10" min="0" placeholder="例: 1800">
+        </label>
+        <button type="button" id="saveSettingsBtn" class="btn btn-primary btn-block">保存</button>
+      </div>
+    </details>
+
+    <details class="card collapsible" id="backupCard">
+      <summary>バックアップ（GitHub Gist）</summary>
+      <p class="notice">
+        記録するたびに、あなた専用の非公開Gistへ自動でバックアップします。
+        トークンは <code>gist</code> 権限のみのものを使ってください。
+      </p>
+      <div class="quick-form">
+        <label class="field">
+          <span class="field-label">アクセストークン</span>
+          <input type="password" id="setGistToken" autocomplete="off" placeholder="ghp_ または github_pat_">
+        </label>
+        <label class="field">
+          <span class="field-label">Gist ID（自動で入ります）</span>
+          <input type="text" id="setGistId" autocomplete="off" placeholder="未接続">
+        </label>
+        <div class="row-btns">
+          <button type="button" id="gistConnectBtn" class="btn btn-primary">接続してバックアップ</button>
+          <button type="button" id="gistRestoreBtn" class="btn btn-ghost">Gistから復元</button>
+        </div>
+        <p class="gist-log" id="gistLog"></p>
+      </div>
+    </details>
+
+    <details class="card collapsible">
+      <summary>ファイルで書き出し・読み込み</summary>
+      <div class="row-btns">
+        <button id="exportBtn" class="btn btn-ghost" type="button">エクスポート</button>
+        <label class="btn btn-ghost file-label">
+          インポート
+          <input type="file" id="importInput" accept="application/json" hidden>
+        </label>
+      </div>
+    </details>
+
+    <p class="version-note" id="versionNote"></p>
+  </section>
+
+</main>
+
+<nav class="tabbar" id="tabs">
+  <button class="tab-btn active" data-tab="home">
+    <span class="tab-ico" aria-hidden="true">📈</span><span class="tab-text">ホーム</span>
+  </button>
+  <button class="tab-btn" data-tab="weight">
+    <span class="tab-ico" aria-hidden="true">⚖️</span><span class="tab-text">体重</span>
+  </button>
+  <button class="tab-btn" data-tab="meals">
+    <span class="tab-ico" aria-hidden="true">🍚</span><span class="tab-text">食事</span>
+  </button>
+  <button class="tab-btn" data-tab="other">
+    <span class="tab-ico" aria-hidden="true">⋯</span><span class="tab-text">その他</span>
+  </button>
+</nav>
+
+<script src="app.js" defer></script>
+</body>
+</html>

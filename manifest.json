@@ -1,0 +1,21 @@
+{
+  "name": "体重ノート",
+  "short_name": "体重ノート",
+  "description": "体重と食事を記録して減量を続けるための記録アプリ",
+  "lang": "ja",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f6f8",
+  "theme_color": "#1a7a5a",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "体重を記録", "url": "./index.html#weight", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "食事を記録", "url": "./index.html#meals", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
