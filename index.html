@@ -41,6 +41,10 @@
           <span class="slot-label">摂取カロリー</span>
           <span class="slot-value" id="todayCalories">—</span>
         </button>
+        <button type="button" class="today-slot" data-goto="bp">
+          <span class="slot-label">血圧</span>
+          <span class="slot-value bp-lines" id="todayBp">—</span>
+        </button>
       </div>
       <p class="today-hint" id="todayHint"></p>
     </div>
@@ -82,6 +86,16 @@
     <div class="card">
       <h3>摂取カロリー</h3>
       <div class="chart-box"><canvas id="chartCalories"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h3>血圧 <small>朝・夜（点線は家庭血圧の基準 135/85）</small></h3>
+      <div class="chart-box"><canvas id="chartBp"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h3>脈拍 <small>朝・夜</small></h3>
+      <div class="chart-box"><canvas id="chartPulse"></canvas></div>
     </div>
 
     <details class="card collapsible">
@@ -204,6 +218,57 @@
     </div>
   </section>
 
+  <!-- ============ 血圧 ============ -->
+  <section id="tab-bp" class="tab-panel">
+    <form id="form-bp" class="card quick-form">
+      <label class="field">
+        <span class="field-label">日付</span>
+        <input type="date" name="date" required>
+      </label>
+
+      <div class="field">
+        <span class="field-label">区分</span>
+        <div class="segmented segmented-2" id="bpPeriodSeg" role="radiogroup" aria-label="測定区分">
+          <button type="button" class="seg-btn" data-value="朝" role="radio">朝</button>
+          <button type="button" class="seg-btn" data-value="夜" role="radio">夜</button>
+        </div>
+      </div>
+
+      <div class="bp-input-grid">
+        <label class="field">
+          <span class="field-label">上 (mmHg)</span>
+          <input type="number" name="bpHigh" id="bpHighInput" inputmode="numeric"
+                 step="1" min="40" max="300" required autocomplete="off">
+        </label>
+        <label class="field">
+          <span class="field-label">下 (mmHg)</span>
+          <input type="number" name="bpLow" inputmode="numeric"
+                 step="1" min="20" max="200" required autocomplete="off">
+        </label>
+        <label class="field">
+          <span class="field-label">脈拍 (拍/分)</span>
+          <input type="number" name="pulse" inputmode="numeric"
+                 step="1" min="20" max="250" autocomplete="off">
+        </label>
+      </div>
+
+      <label class="field">
+        <span class="field-label">メモ（任意）</span>
+        <input type="text" name="memo" autocomplete="off">
+      </label>
+
+      <button type="submit" class="btn btn-primary btn-block">記録する</button>
+    </form>
+
+    <h2 class="list-heading">記録一覧</h2>
+    <div class="table-wrap">
+      <table id="table-bp">
+        <thead><tr><th>日付</th><th>区分</th><th>血圧</th><th>脈拍</th><th>メモ</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
   <!-- ============ その他 ============ -->
   <section id="tab-other" class="tab-panel">
 
@@ -226,18 +291,16 @@
     </details>
 
     <details class="card collapsible">
-      <summary>睡眠・血圧の記録</summary>
+      <summary>睡眠の記録</summary>
       <form id="form-vitals" class="quick-form">
         <label class="field"><span class="field-label">日付</span><input type="date" name="date" required></label>
         <label class="field"><span class="field-label">睡眠時間 (h)</span><input type="number" name="sleepHours" inputmode="decimal" step="0.1" min="0" max="24"></label>
-        <label class="field"><span class="field-label">血圧 上</span><input type="number" name="bpHigh" inputmode="numeric" step="1" min="0"></label>
-        <label class="field"><span class="field-label">血圧 下</span><input type="number" name="bpLow" inputmode="numeric" step="1" min="0"></label>
         <label class="field"><span class="field-label">体調メモ</span><input type="text" name="memo" autocomplete="off"></label>
         <button type="submit" class="btn btn-primary btn-block">記録する</button>
       </form>
       <div class="table-wrap">
         <table id="table-vitals">
-          <thead><tr><th>日付</th><th>睡眠</th><th>血圧</th><th>メモ</th><th></th></tr></thead>
+          <thead><tr><th>日付</th><th>睡眠</th><th>メモ</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -306,6 +369,9 @@
   </button>
   <button class="tab-btn" data-tab="meals">
     <span class="tab-ico" aria-hidden="true">🍚</span><span class="tab-text">食事</span>
+  </button>
+  <button class="tab-btn" data-tab="bp">
+    <span class="tab-ico" aria-hidden="true">🩺</span><span class="tab-text">血圧</span>
   </button>
   <button class="tab-btn" data-tab="other">
     <span class="tab-ico" aria-hidden="true">⋯</span><span class="tab-text">その他</span>

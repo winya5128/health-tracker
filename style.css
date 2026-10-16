@@ -159,7 +159,7 @@ main {
 
 .today-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
 }
 
@@ -184,6 +184,8 @@ main {
 .slot-label { font-size: 0.72rem; color: var(--text-muted); }
 .slot-value { font-size: 1.35rem; font-weight: 700; }
 .slot-value.empty { color: var(--text-muted); font-weight: 400; font-size: 1rem; }
+/* 血圧は朝・夜の2行を出すので小さめにする */
+.slot-value.bp-lines { font-size: 0.82rem; line-height: 1.5; white-space: pre-line; }
 
 .today-hint {
   margin: 10px 0 0;
@@ -372,6 +374,14 @@ input[type="date"] {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
+}
+
+.segmented-2 { grid-template-columns: repeat(2, 1fr); }
+
+.bp-input-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
 .seg-btn {
@@ -611,7 +621,7 @@ tbody tr:last-child td { border-bottom: none; }
   bottom: 0;
   z-index: 30;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   background: var(--surface);
   border-top: 1px solid var(--border);
   padding-bottom: env(safe-area-inset-bottom);
@@ -640,6 +650,7 @@ tbody tr:last-child td { border-bottom: none; }
 body.view-mode .tabbar,
 body.view-mode #tab-weight,
 body.view-mode #tab-meals,
+body.view-mode #tab-bp,
 body.view-mode #tab-other { display: none; }
 
 body.view-mode { padding-bottom: 24px; }

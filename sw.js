@@ -1,7 +1,7 @@
 // Service Worker
 // 【重要】アプリのファイルを変更したら必ず CACHE_VERSION を上げること。
 // 上げ忘れると、iPhone 側に古い画面がキャッシュされたまま更新されない。
-const CACHE_VERSION = "v2.0.2";
+const CACHE_VERSION = "v2.1.0";
 const CACHE_NAME = `health-tracker-${CACHE_VERSION}`;
 
 const PRECACHE = [

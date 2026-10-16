@@ -1,6 +1,6 @@
-const APP_VERSION = "2.0.2";
+const APP_VERSION = "2.1.0";
 const STORAGE_PREFIX = "healthTracker:";
-const CATEGORIES = ["weight", "meals", "exercise", "vitals"];
+const CATEGORIES = ["weight", "meals", "exercise", "vitals", "bp"];
 const GIST_FILENAME = "health-tracker.json";
 
 // PCから閲覧するときは ?mode=view を付ける。
@@ -64,6 +64,7 @@ const DEFAULT_SETTINGS = {
   gistToken: "",
   gistId: "",
   lastBackupAt: "",
+  bpMigrated: false,
 };
 
 function loadSettings() {
@@ -148,6 +149,43 @@ function saveFoodDb(db) {
 }
 
 let foodDb = loadFoodDb();
+
+// ---------- 血圧の移行（v2.1.0） ----------
+// v2.0 までは血圧を vitals（睡眠と同じフォーム）に bpHigh/bpLow として持っていた。
+// これを bp カテゴリへ区分「朝」としてコピーする。元の vitals は消さない。
+// id を元レコードから決めるので、何度実行しても重複しない。
+
+function bpFromVitals(vitals, existingBp) {
+  const ids = new Set(existingBp.map((r) => r.id));
+  return vitals
+    .filter((v) => v.bpHigh != null && v.bpLow != null && !ids.has(`mig-${v.id}`))
+    .map((v) => ({
+      id: `mig-${v.id}`,
+      date: v.date,
+      period: "朝",
+      bpHigh: v.bpHigh,
+      bpLow: v.bpLow,
+      pulse: null,
+      memo: v.memo || "",
+    }));
+}
+
+function migrateVitalsBp() {
+  if (VIEW_MODE || settings.bpMigrated) return;
+  const vitals = Storage.load("vitals");
+  // vitals が空のうちは完了扱いにしない（後でGistから復元されたときに移行するため）
+  if (vitals.length === 0) return;
+  const bp = Storage.load("bp");
+  const added = bpFromVitals(vitals, bp);
+  if (added.length) {
+    const merged = bp.concat(added);
+    merged.sort((a, b) => (a.date < b.date ? 1 : -1));
+    Storage.save("bp", merged);
+    scheduleBackup();
+  }
+  // 一度完了したら、以後は移行分を削除しても復活させない
+  saveSettings({ bpMigrated: true });
+}
 
 // ---------- Gist バックアップ ----------
 
@@ -287,6 +325,7 @@ async function gistRestore() {
     logGist("Gistから読み込んでいます…");
     const payload = await fetchGistPayload(token, gistId);
     mergePayload(payload);
+    migrateVitalsBp();
     saveSettings({ gistToken: token, gistId });
     logGist("復元しました。");
     refreshAll();
@@ -343,15 +382,14 @@ document.querySelectorAll("[data-goto]").forEach((el) => {
   el.addEventListener("click", () => switchTab(el.dataset.goto));
 });
 
-// ショートカットから #weight / #meals 付きで開くと、その入力画面が直接開く。
+// ショートカットから #weight / #meals / #bp 付きで開くと、その入力画面が直接開く。
 function applyHashRoute() {
   const target = location.hash.replace("#", "");
-  if (["home", "weight", "meals", "other"].includes(target)) {
+  if (["home", "weight", "meals", "bp", "other"].includes(target)) {
     switchTab(target);
-    if (target === "weight") {
-      const input = document.getElementById("weightInput");
-      if (input) setTimeout(() => input.focus(), 150);
-    }
+    const focusId = { weight: "weightInput", bp: "bpHighInput" }[target];
+    const input = focusId && document.getElementById(focusId);
+    if (input) setTimeout(() => input.focus(), 150);
   }
 }
 
@@ -379,11 +417,16 @@ const TABLE_CONFIG = {
     ],
   },
   vitals: {
-    columns: ["date", "sleepHours", "bp", "memo"],
+    columns: ["date", "sleepHours", "memo"],
+    render: (r) => [r.date, r.sleepHours ? `${r.sleepHours} h` : "-", r.memo || "-"],
+  },
+  bp: {
+    columns: ["date", "period", "bp", "pulse", "memo"],
     render: (r) => [
       r.date,
-      r.sleepHours ? `${r.sleepHours} h` : "-",
-      r.bpHigh && r.bpLow ? `${r.bpHigh}/${r.bpLow}` : "-",
+      r.period,
+      `${r.bpHigh}/${r.bpLow}`,
+      r.pulse != null ? `${r.pulse}` : "-",
       r.memo || "-",
     ],
   },
@@ -446,6 +489,7 @@ function setupForm(category, extract) {
     renderTable(category);
     renderDashboard();
     if (category === "weight") updateWeightHint();
+    if (category === "bp") setBpPeriod(guessBpPeriod());
     flash("記録しました");
   });
 
@@ -479,10 +523,42 @@ setupForm("exercise", (data) => ({
 setupForm("vitals", (data) => ({
   date: data.get("date"),
   sleepHours: data.get("sleepHours") ? parseFloat(data.get("sleepHours")) : null,
-  bpHigh: data.get("bpHigh") ? parseFloat(data.get("bpHigh")) : null,
-  bpLow: data.get("bpLow") ? parseFloat(data.get("bpLow")) : null,
   memo: data.get("memo") || "",
 }));
+
+// ---------- 血圧（朝・夜） ----------
+
+function guessBpPeriod() {
+  return new Date().getHours() < 15 ? "朝" : "夜";
+}
+
+function setBpPeriod(value) {
+  document.querySelectorAll("#bpPeriodSeg .seg-btn").forEach((b) => {
+    const on = b.dataset.value === value;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-checked", String(on));
+  });
+}
+
+function selectedBpPeriod() {
+  const active = document.querySelector("#bpPeriodSeg .seg-btn.active");
+  return active ? active.dataset.value : guessBpPeriod();
+}
+
+document.getElementById("bpPeriodSeg")?.addEventListener("click", (e) => {
+  const btn = e.target.closest(".seg-btn");
+  if (btn) setBpPeriod(btn.dataset.value);
+});
+
+setupForm("bp", (data) => ({
+  date: data.get("date"),
+  period: selectedBpPeriod(),
+  bpHigh: parseFloat(data.get("bpHigh")),
+  bpLow: parseFloat(data.get("bpLow")),
+  pulse: data.get("pulse") ? parseFloat(data.get("pulse")) : null,
+  memo: data.get("memo") || "",
+}));
+setBpPeriod(guessBpPeriod());
 
 // ---------- 体重入力の補助 ----------
 
@@ -844,6 +920,19 @@ function renderTodayCard() {
   cEl.classList.toggle("empty", calToday == null);
   cEl.closest(".today-slot").classList.toggle("filled", calToday != null);
 
+  const bpToday = Storage.load("bp").filter((r) => r.date === today);
+  const bpText = (period) => {
+    const records = bpToday.filter((r) => r.period === period);
+    const hi = dailyAverage(records, today, "bpHigh");
+    const lo = dailyAverage(records, today, "bpLow");
+    return hi != null && lo != null ? `${period} ${Math.round(hi)}/${Math.round(lo)}` : `${period} 未`;
+  };
+  const bEl = document.getElementById("todayBp");
+  const bpFilled = bpToday.length > 0;
+  bEl.textContent = bpFilled ? `${bpText("朝")}\n${bpText("夜")}` : "未記録";
+  bEl.classList.toggle("empty", !bpFilled);
+  bEl.closest(".today-slot").classList.toggle("filled", bpFilled);
+
   const hint = document.getElementById("todayHint");
   if (weightToday == null) {
     hint.textContent = "まずは体重だけでも記録しましょう。";
@@ -963,6 +1052,56 @@ function renderDashboard() {
     options: { scales: { y: { beginAtZero: true } } },
   });
 
+  // 朝と夜は別の線にする。同じ日・同じ区分が複数あれば平均する。
+  const bpRecords = Storage.load("bp");
+  const bpByPeriod = {
+    朝: bpRecords.filter((r) => r.period === "朝"),
+    夜: bpRecords.filter((r) => r.period === "夜"),
+  };
+  const bpSeries = (period, field) => labels.map((d) => dailyAverage(bpByPeriod[period], d, field));
+  const line = (label, data, color, dashed) => ({
+    label,
+    data,
+    borderColor: color,
+    backgroundColor: color,
+    borderWidth: dashed ? 1.5 : 2,
+    borderDash: dashed ? [4, 3] : [],
+    pointRadius: 2,
+  });
+  const refLine = (label, value) => ({
+    label,
+    data: labels.map(() => value),
+    borderColor: "rgba(224,138,46,.8)",
+    backgroundColor: "rgba(224,138,46,.8)",
+    borderDash: [5, 4],
+    borderWidth: 1.5,
+    pointRadius: 0,
+  });
+  drawChart("chartBp", {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        line("上(朝)", bpSeries("朝", "bpHigh"), "#c0392b"),
+        line("上(夜)", bpSeries("夜", "bpHigh"), "#e8867a", true),
+        line("下(朝)", bpSeries("朝", "bpLow"), "#2c6fbb"),
+        line("下(夜)", bpSeries("夜", "bpLow"), "#7fb0e6", true),
+        refLine("基準135", 135),
+        refLine("基準85", 85),
+      ],
+    },
+  });
+  drawChart("chartPulse", {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        line("脈拍(朝)", bpSeries("朝", "pulse"), "#d35400"),
+        line("脈拍(夜)", bpSeries("夜", "pulse"), "#f0a868", true),
+      ],
+    },
+  });
+
   const exerciseRecords = Storage.load("exercise");
   drawChart("chartExercise", {
     type: "line",
@@ -1059,6 +1198,7 @@ document.getElementById("importInput")?.addEventListener("change", async (e) => 
   if (!file) return;
   try {
     mergePayload(JSON.parse(await file.text()));
+    migrateVitalsBp();
     refreshAll();
     scheduleBackup();
     alert("インポートが完了しました。");
@@ -1098,6 +1238,9 @@ async function initViewMode() {
     remoteData = await fetchGistPayload(token, gistId);
     if (remoteData.foods) foodDb = normalizeFoodDb(remoteData.foods);
     if (remoteData.settings) settings = { ...settings, ...remoteData.settings };
+    // iPhone側がまだ v2.1 に上がっておらず bp が無いGistでも、血圧を表示する
+    const remoteBp = Array.isArray(remoteData.bp) ? remoteData.bp : [];
+    remoteData.bp = remoteBp.concat(bpFromVitals(remoteData.vitals || [], remoteBp));
     setSyncStatus("Gistから読込済み");
   } catch (err) {
     setSyncStatus("読込エラー", true);
@@ -1116,6 +1259,8 @@ function init() {
     return;
   }
 
+  migrateVitalsBp();
+  renderTable("bp");
   applyHashRoute();
   renderDashboard();
 
